@@ -48,8 +48,13 @@ def utils():
 
 
 @pytest.fixture
-def create_ixload_session_url(tbinfo):
+def create_hero_config(tbinfo):
+    hero_config_dict = {}
     ixload_settings = {}
+
+    tb_ixn = tbinfo
+    hero_config_dict['ixn'] = tb_ixn
+
     tb = tbinfo['stateful'][0]
     tg = {
         'server': tb['server'],
@@ -68,24 +73,51 @@ def create_ixload_session_url(tbinfo):
         test_settings.apiVersion = "v0"
         test_settings.ixLoadVersion = "9.20.115.79"
 
-        # aggregated 2ips
-        slot1 = tg['tgen'][0]['interfaces'][0][1]
-        s1port1 = tg['tgen'][0]['interfaces'][0][2]
-        s1port2 = tg['tgen'][0]['interfaces'][1][2]
+        client_side = tg['tgen'][0]['interfaces'][::2]
+        server_side = tg['tgen'][0]['interfaces'][1::2]
+        no_of_cards = len(client_side)
 
-        slot2 = tg['tgen'][0]['interfaces'][2][1]
-        s2port1 = tg['tgen'][0]['interfaces'][2][2]
-        s2port2 = tg['tgen'][0]['interfaces'][3][2]
+        if no_of_cards == 4:
+            test_settings.portListPerCommunity = {
+                # format: { community name : [ port list ] }
+                "Traffic1@Network1": [(1, client_side[0][1], client_side[0][2]),
+                                      (1, client_side[1][1], client_side[1][2]),
+                                      (1, client_side[2][1], client_side[2][2]),
+                                      (1, client_side[3][1], client_side[3][2]),
+                                      ],
+                "Traffic2@Network2": [(1, server_side[0][1], server_side[0][2]),
+                                      (1, server_side[1][1], server_side[1][2]),
+                                      (1, server_side[2][1], server_side[2][2]),
+                                      (1, server_side[3][1], server_side[3][2]),
+                                      ]
+            }
+        elif no_of_cards == 8:
+            test_settings.portListPerCommunity = {
+                # format: { community name : [ port list ] }
+                "Traffic1@Network1": [(1, client_side[0][1], client_side[0][2]),
+                                      (1, client_side[1][1], client_side[1][2]),
+                                      (1, client_side[2][1], client_side[2][2]),
+                                      (1, client_side[3][1], client_side[3][2]),
+                                      (1, client_side[4][1], client_side[4][2]),
+                                      (1, client_side[5][1], client_side[5][2]),
+                                      (1, client_side[6][1], client_side[6][2]),
+                                      (1, client_side[7][1], client_side[7][2]),
+                                      ],
+                "Traffic2@Network2": [(1, server_side[0][1], server_side[0][2]),
+                                      (1, server_side[1][1], server_side[1][2]),
+                                      (1, server_side[2][1], server_side[2][2]),
+                                      (1, server_side[3][1], server_side[3][2]),
+                                      (1, server_side[4][1], server_side[4][2]),
+                                      (1, server_side[5][1], server_side[5][2]),
+                                      (1, server_side[6][1], server_side[6][2]),
+                                      (1, server_side[7][1], server_side[7][2]),
+                                      ]
+            }
 
-        test_settings.portListPerCommunity = {
-            # format: { community name : [ port list ] }
-            "Traffic1@Network1": [(1, slot1, s1port1), (1, slot1, s1port2)],
-            "Traffic2@Network2": [(1, slot2, s2port1), (1, slot2, s2port2)]
-        }
         chassisList = tg['tgen'][0]['interfaces'][0][0]
         test_settings.chassisList = [chassisList]
 
-        return test_settings
+        return test_settings, no_of_cards
 
     def create_session(test_settings):
         connection = IxRestUtils.getConnection(
@@ -97,14 +129,18 @@ def create_ixload_session_url(tbinfo):
 
         return connection
 
-    test_settings = create_test_settings()
+    test_settings, no_of_cards = create_test_settings()
     connection = create_session(test_settings)
     connection.setApiKey(test_settings.apiKey)
 
     ixload_settings['connection'] = connection
     ixload_settings['test_settings'] = test_settings
 
-    yield ixload_settings
+    hero_config_dict['ixl'] = ixload_settings
+    hero_config_dict['num_of_cards'] = no_of_cards
+
+    yield hero_config_dict
+
 
 def getTestClass(*args, **kwargs):
     if test_type:
