@@ -75,11 +75,37 @@ class HeroHelper:
             'server': {'increment': "00:00:00:00:00:02"}
         },
         'timeline_settings': {
-            'timelineType': 1,
+            # basic timeline
+            'timelineType': 0,
             'url': "/ixload/test/activetest/communitylist/0/activitylist/0/timeline",
+            'activitylist_url': "/ixload/test/activetest/communitylist/0/activitylist/0",
             'advanced': {
                 'rampUpValue': 1000000,
                 'sustainTime': 240,
+            },
+            'activitylist_cps': {
+                'constraintType': 'SimulatedUserConstraint',
+                'secondaryConstraintType': 'SimulatedUserConstraint',
+                'constraintValue': 3150,
+                'enableConstraint': True,
+            },
+            'activitylist_constraint_cps': {
+                'constraintType': 'SimulatedUserConstraint',
+            },
+            'basic_cps': {
+                'rampDownTime': 20,
+                'rampDownValue': 0,
+                'rampUpInterval': 1,
+                'rampUpValue': 3150,
+                'standbyTime': 0,
+                'sustainTime': 240,
+            },
+            'basic_tcp_bg': {
+                'rampDownTime': 20,
+                'rampDownValue': 0,
+                'rampUpInterval': 1,
+                'standbyTime': 0,
+                'sustainTime': 300,
             },
             'advancedIteration': {
                 'd0': {'duration': 30, 'endObjectiveScale': 0},
@@ -141,6 +167,14 @@ class HeroHelper:
         },
         'server_disable_tcp_tw_recycle': {
             'json': {"tcp_tw_recycle": False},
+            'url': "/ixload/test/activeTest/communityList/1/network/globalPlugins/5"
+        },
+        'client_tcp_tw_rfc1323': {
+            'json': {'tcp_tw_rfc1323_strict': True},
+            'url': "/ixload/test/activeTest/communityList/0/network/globalPlugins/2"
+        },
+        'server_tcp_tw_rfc1323': {
+            'json': {"tcp_tw_rfc1323_strict": True},
             'url': "/ixload/test/activeTest/communityList/1/network/globalPlugins/5"
         },
         'stats_configured': {
@@ -328,18 +362,26 @@ class HeroHelper:
             response = self._patch_test_setting(self.url_patch_dict, 'tcp_adjust_tcp_buffers')
 
         response = self._patch_test_setting(self.url_patch_dict, 'http_tcp_conns_per_user')
-        response = self._patch_test_setting(self.url_patch_dict, 'client_disable_tcp_tw_recycle')
-        response = self._patch_test_setting(self.url_patch_dict, 'server_disable_tcp_tw_recycle')
 
     def _adjust_timeline_settings(self):
 
         IxLoadUtils.log("Adjusting Test Timeline settings session {}...".format(self.session_no))
+        url_timeline = self.url_patch_dict['base_url'] + self.url_patch_dict['timeline_settings']['url']
+        url_activitylist = self.url_patch_dict['base_url'] + \
+                                self.url_patch_dict['timeline_settings']['activitylist_url']
         if self.url_patch_dict['timeline_settings']['timelineType'] == 0:
-            rampDownTime = 10
-            sustainTime = 180
-            self._set_timeline_settings(self.test_settings, rampDownTime, sustainTime)
+            if self.test_config_type == 'cps':
+                activitylist_json = self.url_patch_dict['timeline_settings']['activitylist_cps']
+                activitylist_constraint_json = self.url_patch_dict['timeline_settings']['activitylist_constraint_cps']
+                timeline_json = self.url_patch_dict['timeline_settings']['basic_cps']
+
+                response = requests.patch(url_timeline, json=timeline_json)
+                response = requests.patch(url_activitylist, json=activitylist_json)
+                response = requests.patch(url_activitylist, json=activitylist_constraint_json)
+            else:
+                timeline_json = self.url_patch_dict['timeline_settings']['basic_tcp_bg']
+                response = requests.patch(url_timeline, json=timeline_json)
         else:
-            url_timeline = self.url_patch_dict['base_url'] + self.url_patch_dict['timeline_settings']['url']
             timelineType_json = {'timelineType': self.url_patch_dict['timeline_settings']['timelineType']}
             response = requests.patch(url_timeline, json=timelineType_json)
 
@@ -396,8 +438,6 @@ class HeroHelper:
         self._disable_unused_ips()
         # Turn off TCP settings
         self._adjust_tcp_settings()
-        # adjust timeline
-        self._adjust_timeline_settings()
         # adjust IxL CPS stat
         self._adjust_cps_stat()
         # create custom traffic maps
@@ -405,6 +445,8 @@ class HeroHelper:
             self._create_custom_traffic_maps()
         # finish config
         self._complete_ixl_config()
+        # adjust timeline
+        self._adjust_timeline_settings()
         # save rxf
         self._save_rxf()
 
@@ -447,7 +489,6 @@ class HeroHelper:
                 # format: { activityName : { option : value } }
                 "HTTPClient1": {
                     "userIpMapping": "1:ALL",
-                    "enableConstraint": False,
                     "userObjectiveType": self.url_patch_dict['userObjectiveType_cps'],
                     "userObjectiveValue": self.user_init_obj,
                 }
@@ -1362,7 +1403,7 @@ class HeroHelper:
 
                 t.start()
                 child_threads.append(t)
-                time.sleep(2)
+                time.sleep(10)
 
             for t in child_threads:
                 t.join()
