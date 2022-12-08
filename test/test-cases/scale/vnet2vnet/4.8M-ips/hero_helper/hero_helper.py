@@ -345,7 +345,7 @@ class HeroHelper:
             self.user_init_obj_tcp_bg = 1000000
             self.url_patch_dict['initial_objective'] = self.user_init_obj
             self.url_patch_dict['initial_objective_tcp_bg'] = self.user_init_obj_tcp_bg
-            self.enis = 8
+            self.enis = ENI_COUNT
             self.nsgs = self.enis * self.ip_ranges_per_vpc
 
         return slot_total
@@ -674,15 +674,8 @@ class HeroHelper:
             self.ip_server_range_adjust = int(enis/2)
 
             if self.test_config_type == 'cps':
-                self.ip_client_range_adjust = self.ip_client_range_adjust + 6
+                self.ip_client_range_adjust = self.ip_client_range_adjust + ip_ranges_per_vpc
                 self.ip_server_range_adjust = self.ip_server_range_adjust + 1
-            elif self.test_config_type == 'tcp_bg':
-                if enis == 8:
-                    self.ip_client_range_adjust = self.ip_client_range_adjust + 50
-                    self.ip_server_range_adjust = 7
-                elif enis == 16:
-                    self.ip_client_range_adjust = self.ip_client_range_adjust + 42
-                    self.ip_server_range_adjust = 15
         else:
             self.ip_client_range_adjust = 0
             self.ip_server_range_adjust = 0
@@ -709,16 +702,21 @@ class HeroHelper:
             for i in range(self.ip_ranges_per_vpc):
                 url_ip = self._get_url_ip("client", client_ip_range_names, i)
                 response = requests.patch(url_ip, json=self.url_patch_dict['auto_mac_setting'])
+                #response = self.make_request('PATCH', url_ip, url_patch_dict['auto_mac_setting'])
             for i in range(1):
                 url_ip = self._get_url_ip("server", server_ip_range_names, i)
                 response = requests.patch(url_ip, json=self.url_patch_dict['auto_mac_setting'])
+                #response = self.make_request('PATCH', url_ip, url_patch_dict['auto_mac_setting'])
         else:
             for i in range(enis - self.ip_server_range_adjust):
                 url_ip = self._get_url_ip("server", server_ip_range_names, i)
                 response = requests.patch(url_ip, json=self.url_patch_dict['auto_mac_setting'])
+                #response = self.make_request('PATCH', url_ip, url_patch_dict['auto_mac_setting'])
+
             for i in range(nsgs - self.ip_client_range_adjust):
                 url_ip = self._get_url_ip("client", client_ip_range_names, i)
                 response = requests.patch(url_ip, json=self.url_patch_dict['auto_mac_setting'])
+                #response = self.make_request('PATCH', url_ip, url_patch_dict['auto_mac_setting'])
 
         ip_range_list.append(client_ip_range_names)
         ip_range_list.append(client_range_list_info)
@@ -797,13 +795,6 @@ class HeroHelper:
                         eni_index += 1
                     ip_count = 0
 
-        # When splitting networks the range_settings index maybe off
-        """
-        if len(client_ip_range_names) != len(client_ip_range_settings):
-            client_ip_range_settings.append(client_ip_range_settings[-1])
-            client_mac_range_settings.append(client_mac_range_settings[-1])
-            client_vlan_range_settings.append(client_vlan_range_settings[-1])
-        """
         if self.split_networks is True:
             nsgs_split = int(nsgs/2)
         else:
@@ -1198,22 +1189,18 @@ class HeroHelper:
         http_requests_failed_l = [[x[0], x[5]] for x in stats_global]
         http_requests_failed = max([x[1] for x in http_requests_failed_l])
         failures_dict["http_requests_failed"] = http_requests_failed
-        #http_requests_dict = _check_for_error_stats(http_requests_failed_l, "http_requests_failed")
 
         tcp_retries_l = [[x[0], x[6]] for x in stats_global]
         tcp_retries = max([x[1] for x in tcp_retries_l])
         failures_dict["tcp_retries"] = tcp_retries
-        #tcp_retries_dict = _check_for_error_stats(tcp_retries_l, "tcp_retries")
 
         tcp_resets_tx_l = [[x[0], x[7]] for x in stats_global]
         tcp_resets_tx = max([x[1] for x in tcp_resets_tx_l])
         failures_dict["tcp_resets_tx"] = tcp_resets_tx
-        #tcp_resets_tx_dict = _check_for_error_stats(tcp_resets_tx_l, "tcp_resets_tx")
 
         tcp_resets_rx_l = [[x[0], x[8]] for x in stats_global]
         tcp_resets_rx = max([x[1] for x in tcp_resets_rx_l])
         failures_dict["tcp_resets_rx"] = tcp_resets_rx
-        #tcp_resets_rx_dict = _check_for_error_stats(tcp_resets_rx_l, "tcp_resets_rx")
 
         failures = http_requests_failed + tcp_retries + tcp_resets_tx + tcp_resets_rx
         failures_dict["total"] = failures
@@ -1227,8 +1214,6 @@ class HeroHelper:
             cc_stats = [[x[0], x[2]] for x in stats_global if x[0] >= steady_time_start]
             obj_max_w_ts = self._get_max_cc(stats_global, cc_stats)
             obj_max = obj_max_w_ts[1]
-        #effective_cps, effective_cps_ts = _get_effective_cps(cps_stats, http_requests_dict, tcp_retries_dict,
-        #                                                     tcp_resets_tx_dict, tcp_resets_rx_dict)
 
         latency_ranges = self._get_latency_ranges(stats_global)
 
@@ -1268,20 +1253,6 @@ class HeroHelper:
             # vlanRangePairs meshType
             # TODO --- vlanRangePairs configured correctly in sequence out of box but not custom
             pass
-            """
-            source_range_index = 0
-            for eni in range(enis):
-                destinationId_json = {'destinationId': destId}
-                if split_networks is True and eni % 2 == 1:
-                    url = sourceRanges_url % (source_range_index)
-                    response = requests.patch(url, json=destinationId_json)
-                    source_range_index += 1
-                    destId += 2
-                elif split_networks is False:
-                    url = sourceRanges_url % (eni)
-                    response = requests.patch(url, json=destinationId_json)
-                    destId += 1
-            """
 
         # destinationRanges
         destRanges_json = {'enable': False}
@@ -1475,13 +1446,6 @@ class HeroHelper:
             % self.test_iteration)
         old_value = test_value
 
-        """
-        if self.test_config_type == 'cps':
-            IxLoadUtils.log("Testing with CPS value = %d" % test_value)
-        else:
-            IxLoadUtils.log("Starting TCP BG traffic CC objective value = %d" % test_value)
-        """
-
         IxLoadUtils.log("Starting the test session {} {}...".format(self.session_no, self.test_config_type))
         IxLoadUtils.runTest(self.connection, self.session_url)
         IxLoadUtils.log("Test started session {} {}.".format(self.session_no, self.test_config_type))
@@ -1611,13 +1575,6 @@ class HeroHelper:
             "----Test Iteration %d------------------------------------------------------------------"
             % test_iteration)
         old_value = test_value
-
-        """
-        if self.test_config_type == 'cps':
-            IxLoadUtils.log("Testing with CPS value = %d" % test_value)
-        else:
-            IxLoadUtils.log("Starting TCP BG traffic CC objective value = %d" % test_value)
-        """
 
         IxLoadUtils.log("Applying config session {}, {}...".format(self.session_no, self.test_config_type))
         IxLoadUtils.applyConfiguration(connection, session_url)
